@@ -1,15 +1,16 @@
 from bs4 import BeautifulSoup
 import re
 from abc import ABCMeta, abstractmethod
-
+import os
 ''' Thoughts
-TODO: serious refactoring of BeautifulSoup html parsing 
-1. TODO: Create some sort of dictionary to show what is inside self.text_"ads,
+TODO: serious refactoring of BeautifulSoup html parsing, consider using LXML for speed boost
+        My process is to find the "base" tag of what I want and then navigate through the tree 
+        by tags without any further pattern matching. TODO: Figure out best library for my scraping process
 2. Consider refactoring with a dictionary of target css elements and the variable name 
    to map the element to without explicitly calling BeautifulSoup.find every time
 3. What layer do I need between the list of dictionaries and creating actual objects
    to store in the database?
-4. Should I use factory DP for parser/scraper/objects? Is it pythonic?
+4. Should I use factory DP for parser/scraper/objects? 
 5 Consider making all parse methods private except for parse()
 '''
 class SearchResultParser(metaclass=ABCMeta):
@@ -38,14 +39,17 @@ class SearchResultParser(metaclass=ABCMeta):
     def parse_shopping_ads(self, html):
         '''Parse shopping ads'''
 
+    def create_soup(self):
+        return BeautifulSoup(self.html)
+
     def parse(self, html=None):
         if html:
             self.html = html
         if self.html is None:
             self.get_html_from_file()
 
-        self.parse_text_ads()
-        self.parse_shopping_ads()
+      #  self.parse_text_ads()
+      #  self.parse_shopping_ads()
         self.parse_search_results()
         
 
@@ -65,15 +69,63 @@ class GoogleParser(SearchResultParser):
         pass
 
     def parse_search_results(self):
-        pass    
+        # rank: The position of the search result on the page
+        rank = 1
+        soup = self.create_soup()
+
+        ''' <ol> with class ="rso" surrounds the list of search results.
+            Each li with class "g" represents one search result 
+        '''                                     
+         
+        # <li class="g"> is the start of a single search result
+        for search_li in soup.select('li[class="g"]'):
+            print("s")
+            # Parse each search result individually
+            search_result = self._parse_search_result(search_li)
+            
+            if search_result is not None:
+                search_result['rank'] = rank
+                rank += 1
+                self.search_results.append(search_result)
+
+
+    def _parse_search_result(self, search_li):
+        search_result = {}
+
+        # Grab title link
+        title_link = search_li.select('div.rc > h3.r > a')
+        if title_link is not None and len(title_link)==1:
+            search_result['title'] = title_link[0].text
+            search_result['link'] = title_link[0]['href']
+        
+        # Grab the green url
+        visible_url = search_li.select('div.rc > div.s > div > div.f.kv._SWb > cite._Rm')
+        if visible_url is not None and len(visible_url)==1:
+            search_result['visible_url'] = remove_outer_tag(visible_url[0])
+
+        # Grab the ad creative
+        # Clean the creative date later on
+        creative = search_li.select('div.rc > div.s > div > span.st')
+        if creative is not None and len(creative)==1:
+            search_result['creative'] = remove_outer_tag(creative[0])
+      
+        # if one of the info is missing
+        if not(visible_url or creative or title_link):
+            return None
+
+        return search_result
+
 
     def parse_text_ads(self):
+        # rank: The position of the ad on the page
         rank = 1
-        soup = BeautifulSoup(self.html)
-        
+        soup = self.create_soup()
+        ''' li elements with class "ads-ad" represent one text ad
+        '''
         for ad_li in soup.find_all('li', class_=re.compile("ads-ad")):
+            # Parse each text ad individually
             text_ad = self._parse_text_ad(ad_li)
-            # If the ad info was successfully found
+            
             if text_ad is not None:
                 text_ad['rank'] = rank
                 rank += 1
@@ -91,12 +143,12 @@ class GoogleParser(SearchResultParser):
         if creative is not None:
             text_ad['creative'] = creative.text
         # Grab the actual link and the title of the ad
-        link = ad_li.find('a', class_=re.compile("^(?!display:none).*$"))
-        if link is not None:
-            text_ad['title'] = link.text
-            text_ad['link'] = link['href']
+        title_link = ad_li.find('a', class_=re.compile("^(?!display:none).*$"))
+        if title_link is not None:
+            text_ad['title'] = title_link.text
+            text_ad['link'] = title_link['href']
         # if one of the info is missing
-        if not all([visible_url, creative, link]):
+        if not all([visible_url, creative, title_link]):
             return None
 
         return text_ad
@@ -115,8 +167,9 @@ class BingParser(SearchResultParser):
         pass    
 
     def parse_text_ads(self):
+        # rank: The position of the ad on the page
         rank = 1
-        soup = BeautifulSoup(self.html)
+        soup = self.create_soup()
 
         for ad_div in soup.find_all('div', class_="sb_add sb_adTA"):
             text_ad = self._parse_text_ad(ad_div)
@@ -146,11 +199,11 @@ class BingParser(SearchResultParser):
                 text_ad['secondary_text'] = remove_outer_tag(secondary_text)
 
         # Grab title and the title link
-        actual_link = ad_div.find('h2')
-        if actual_link is not None:
-            actual_link = actual_link.a
-            text_ad['link'] = actual_link['href']
-            text_ad['title'] = remove_outer_tag(actual_link)
+        title_link = ad_div.find('h2')
+        if title_link is not None:
+            title_link = title_link.a
+            text_ad['link'] = title_link['href']
+            text_ad['title'] = remove_outer_tag(title_link)
 
         return text_ad
 
@@ -162,20 +215,26 @@ class BingParser(SearchResultParser):
 def remove_outer_tag(contents):
     return ''.join(map(str, contents))
 
+def traverse_path(soup, path):
+    for tag in path:
+        soup = soup.tag
+        if soup is None:
+            return None
+
 if __name__ == "__main__":
     google = GoogleParser()
     google.parse()
     
-    for text_ad in google.text_ads:
-        for key,value in text_ad.items():
-           pass#  print(str(key) + ": " + str(value))
-        print("\n")
-
-    bing = BingParser()
-    bing.parse()
-    
-    for text_ad in bing.text_ads:
+    for text_ad in google.search_results:
         for key,value in text_ad.items():
             print(str(key) + ": " + str(value))
         print("\n")
 
+   # bing = BingParser()
+  #  bing.parse()
+    
+   # for text_ad in bing.text_ads:
+  #      for key,value in text_ad.items():
+  #          print(str(key) + ": " + str(value))
+ #       print("\n")
+#
