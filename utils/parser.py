@@ -1,17 +1,8 @@
 from bs4 import BeautifulSoup
 import re
 from abc import ABCMeta, abstractmethod
-import os
-''' Thoughts
-TODO: consider using LXML for speed boost since I only traverse through path with CSS selector
-TODO: Figure out most efficient tool to scrape by path
-TODO: Create between method and variable names
-TODO: Add error checking 
-3. Research ETL for python scraping
-4. Should I use factory DP for parser/scraper/objects? 
 
-5 Consider making all parse methods private except for parse()
-'''
+
 class SearchResultParser(metaclass=ABCMeta):
     def __init__(self, search_engine_name, file_name, html=None, soup=None):
         self.search_engine_name = "google"
@@ -79,8 +70,6 @@ class SearchResultParser(metaclass=ABCMeta):
                         results.append(result)
 
                 setattr(self, name, results)
-
-                    
 
     def parse(self, html=None):
         if html:
@@ -158,6 +147,34 @@ class BingParser(SearchResultParser):
 
         super().__init__(**kwargs)
 
+    css_selectors = {
+        'text_ads': {
+            'start_tag' : "div.sb_add.sb_adTA",
+            'elements': {
+                'title' : {
+                    'target': 'text',
+                    'css_selector': 'h2 > a:nth-of-type(1)'
+                },
+                'link' : {
+                    'target': 'href',
+                    'css_selector': 'h2 > a:nth-of-type(1)'
+                },
+                'visible_url' : {
+                    'target': 'text',
+                    'css_selector': 'div.b_caption > div.b_attribution > cite'
+                },
+                'secondary_text' : {
+                    'target': 'text',
+                    'css_selector': 'div.b_caption > div.b_secondaryText'
+                },
+                'creative' : {
+                    'target': 'text',
+                    'css_selector': 'div.ads-creative'
+                }
+            }
+        }
+    }
+
     def parse_shopping_ads(self):
         pass
 
@@ -165,61 +182,15 @@ class BingParser(SearchResultParser):
         pass    
 
     def parse_text_ads(self):
-        # rank: The position of the ad on the page
-        rank = 1
-        soup = self.create_soup()
-
-        for ad_div in soup.find_all('div', class_="sb_add sb_adTA"):
-            text_ad = self._parse_text_ad(ad_div)
-            # If the ad info was successfully found
-            if text_ad is not None:
-                text_ad['rank'] = rank
-                rank += 1
-                self.text_ads.append(text_ad)
-
-    def _parse_text_ad(self, ad_div):
-        text_ad = {}
-
-        # Navigate to the caption
-        caption = ad_div.find('div', class_='b_caption')
-        if caption is not None:
-            # Get the text creative
-            creative = caption.find('p', class_=None)
-            if creative is not None:
-                text_ad['creative'] = creative.text
-            # Get the green url
-            visible_url = caption.find('div', class_='b_attribution')
-            if visible_url is not None:
-                text_ad['visible_url'] = visible_url.cite.text
-            # Get the greyed out secondary text
-            secondary_text = caption.find('div', class_='b_secondaryText')
-            if secondary_text is not None:
-                text_ad['secondary_text'] = remove_outer_tag(secondary_text)
-
-        # Grab title and the title link
-        title_link = ad_div.find('h2')
-        if title_link is not None:
-            title_link = title_link.a
-            text_ad['link'] = title_link['href']
-            text_ad['title'] = remove_outer_tag(title_link)
-
-        return text_ad
-
-
-
+        pass
 
 
 # Use this to remove outer tag until I figure out better way to
 def remove_outer_tag(contents):
     return ''.join(map(str, contents))
 
-def traverse_path(soup, path):
-    for tag in path:
-        soup = soup.tag
-        if soup is None:
-            return None
-
 if __name__ == "__main__":
+    '''
     google = GoogleParser()
     google.parse()
     
@@ -227,12 +198,13 @@ if __name__ == "__main__":
         for key,value in text_ad.items():
             print(str(key) + ": " + str(value))
         print("\n")
-
-   # bing = BingParser()
-  #  bing.parse()
+'''
+    bing = BingParser()
+    bing.parse()
     
-   # for text_ad in bing.text_ads:
-  #      for key,value in text_ad.items():
-  #          print(str(key) + ": " + str(value))
- #       print("\n")
-#
+    for text_ad in bing.text_ads:
+        for key,value in text_ad.items():
+            print(str(key) + ": " + str(value))
+        print("\n")
+    
+
