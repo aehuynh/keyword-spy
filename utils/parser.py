@@ -42,6 +42,31 @@ class SearchResultParser(metaclass=ABCMeta):
     def create_soup(self):
         return BeautifulSoup(self.html)
 
+    def _parse_one(self, soup, css_selectors):
+        ''' Parse one entry using css_selectors to figure out the
+            proper css_selector and variable name
+        '''
+        results = {}
+        for name, selectors in css_selectors.items():
+            element = soup.select(selectors['css_selector'])
+            if element and len(element) == 1:
+                if selectors['target'] is "text":
+                    # Get a variable of the element
+                    result = getattr(element[0], "text")
+                elif selectors['target'] is "untag":
+                    # Get all children of element as a single string
+                    result = remove_outer_tag(element[0])
+                else:
+
+                    result = element[0][selectors['target']]
+
+                results[name] = result
+        
+        if len(results) < 1:
+            return None
+
+        return results
+
     def parse(self, html=None):
         if html:
             self.html = html
@@ -59,62 +84,54 @@ class SearchResultParser(metaclass=ABCMeta):
         self.html = f.read()
 
 class GoogleParser(SearchResultParser):
+    css_selectors = {
+        'search_results': {
+            'start_tag' : 'li[class="g"]',
+            'elements': {
+                'title' : {
+                    'target': 'text',
+                    'css_selector': 'div.rc > h3.r > a'
+                },
+                'link' : {
+                    'target': 'href',
+                    'css_selector': 'div.rc > h3.r > a'
+                },
+                'visible_url' : {
+                    'target': 'text',
+                    'css_selector': 'div.rc > div.s > div > div.f.kv._SWb > cite._Rm'
+                },
+                'creative' : {
+                    'target': 'text',
+                    'css_selector': 'div.rc > div.s > div > span.st'
+                }
+            }
+
+        }
+    }
+
     def __init__(self, **kwargs):
         kwargs['search_engine_name'] = 'google'
         kwargs['file_name'] = 'test_files/google.html'
 
         super().__init__(**kwargs)
 
-    def parse_shopping_ads(self):
-        pass
-
     def parse_search_results(self):
-        # rank: The position of the search result on the page
         rank = 1
+        result_search = self.css_selectors['search_results']
+
         soup = self.create_soup()
 
-        ''' <ol> with class ="rso" surrounds the list of search results.
-            Each li with class "g" represents one search result 
-        '''                                     
-         
-        # <li class="g"> is the start of a single search result
-        for search_li in soup.select('li[class="g"]'):
-            print("s")
-            # Parse each search result individually
-            search_result = self._parse_search_result(search_li)
-            
+        # Navigate to the tag that represents one search result in DOM
+        for start_tag in soup.select(result_search['start_tag']):
+            search_result = self._parse_one(start_tag, result_search['elements'])
             if search_result is not None:
                 search_result['rank'] = rank
-                rank += 1
                 self.search_results.append(search_result)
 
+                rank += 1
 
-    def _parse_search_result(self, search_li):
-        search_result = {}
-
-        # Grab title link
-        title_link = search_li.select('div.rc > h3.r > a')
-        if title_link is not None and len(title_link)==1:
-            search_result['title'] = title_link[0].text
-            search_result['link'] = title_link[0]['href']
-        
-        # Grab the green url
-        visible_url = search_li.select('div.rc > div.s > div > div.f.kv._SWb > cite._Rm')
-        if visible_url is not None and len(visible_url)==1:
-            search_result['visible_url'] = remove_outer_tag(visible_url[0])
-
-        # Grab the ad creative
-        # Clean the creative date later on
-        creative = search_li.select('div.rc > div.s > div > span.st')
-        if creative is not None and len(creative)==1:
-            search_result['creative'] = remove_outer_tag(creative[0])
-      
-        # if one of the info is missing
-        if not(visible_url or creative or title_link):
-            return None
-
-        return search_result
-
+    def parse_shopping_ads(self):
+        pass
 
     def parse_text_ads(self):
         # rank: The position of the ad on the page
@@ -137,7 +154,7 @@ class GoogleParser(SearchResultParser):
         # Grab the url displayed on the ad
         visible_url = ad_li.find('div', class_='ads-visurl')
         if visible_url is not None:
-            text_ad['visible_url'] = remove_outer_tag(visible_url.cite)#remove_outer_tag(visible_url.contents)
+            text_ad['visible_url'] = visible_url.cite.text
         # Grab the ad creative
         creative = ad_li.find('div', class_=re.compile("ads-creative"))
         if creative is not None:
@@ -188,11 +205,11 @@ class BingParser(SearchResultParser):
             # Get the text creative
             creative = caption.find('p', class_=None)
             if creative is not None:
-                text_ad['creative'] = remove_outer_tag(creative)
+                text_ad['creative'] = creative.text
             # Get the green url
             visible_url = caption.find('div', class_='b_attribution')
             if visible_url is not None:
-                text_ad['visible_url'] = remove_outer_tag(visible_url.cite)
+                text_ad['visible_url'] = visible_url.cite.text
             # Get the greyed out secondary text
             secondary_text = caption.find('div', class_='b_secondaryText')
             if secondary_text is not None:
