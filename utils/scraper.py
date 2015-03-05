@@ -1,8 +1,12 @@
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
+
 from user_agents import DEFAULT_USER_AGENT
 import time
-import random
 import sys
 from abc import ABCMeta, abstractmethod
 
@@ -14,9 +18,7 @@ from abc import ABCMeta, abstractmethod
 
 class SearchScraper(metaclass=ABCMeta):
     def __init__(self, search_engine_name, search_page_url, page_source_file_name, search_input_name, should_encode=False, 
-                 search_wait_lower=0, search_wait_upper=0, result_wait_lower=0, result_wait_upper=0, 
-                 use_proxies=False):
-
+                 driver_wait=10, use_proxies=False):
         self.search_engine_name = search_engine_name
         # Name of the search input box
         self.search_input_name = search_input_name
@@ -27,11 +29,8 @@ class SearchScraper(metaclass=ABCMeta):
 
         self.page_source_file_name = page_source_file_name
 
-        # Wait times
-        self.search_wait_lower = search_wait_lower
-        self.search_wait_upper = search_wait_upper
-        self.result_wait_lower = result_wait_lower
-        self.result_wait_upper = result_wait_upper
+        # Default max wait time for driver
+        self.driver_wait = driver_wait
 
         # Whether to use proxies
         self.use_proxies = use_proxies
@@ -44,8 +43,9 @@ class SearchScraper(metaclass=ABCMeta):
         self.driver = driver
 
     # Sleep to wait for search start page to load
-    def pre_search_wait(self):
-        self.random_sleep(self.search_wait_lower, self.search_wait_upper)
+    def wait(self, locator):
+        WebDriverWait(self.driver, self.driver_wait).until(
+            EC.visibility_of_element_located((locator)))
 
     # Enter the search term and hit enter
     def perform_search(self, search_term):
@@ -59,13 +59,9 @@ class SearchScraper(metaclass=ABCMeta):
     def load_search_page(self):
        self.driver.get(self.search_page_url)
 
-    # Sleep while waiting for result page to load
-    def result_wait(self):
-        self.random_sleep(self.result_wait_lower, self.result_wait_upper)
-
     # Grab the page source of the page that the driver is pointed at right nwo
     def grab_page_source(self):
-        self.result_source = self.driver.page_source#execute_script('return document.body.innerHTML;')
+        self.result_source = self.driver.page_source
         # Encode with ascii to solve solve encoding issues
         if self.should_encode:
             self.ascii_encode()
@@ -81,22 +77,29 @@ class SearchScraper(metaclass=ABCMeta):
     def search(self, search_term):
         self.start_driver()
         self.load_search_page()
-        self.pre_search_wait()
+        self.wait_until_input_field_loads()
         self.perform_search(search_term)
-        self.result_wait()
+        self.wait_until_result_page_loads()
         self.grab_page_source()
         self.write_file()
-
-    # Sleep for a random time bounded by a range
-    def random_sleep(self, lower, upper):
-        sleep_time = random.uniform(lower, upper)
-        time.sleep(sleep_time)
 
     # Encode result_source with ascii
     def ascii_encode(self):
         if self.result_source:
             self.result_source = self.result_source.encode("ascii", "ignore")
     
+    @abstractmethod
+    def wait_until_input_field_loads(self):
+        """Wait until the input field for the search query loads. It is an 
+        abstract method because each search engine has a specific element 
+        to wait for.
+        """
+
+    @abstractmethod
+    def wait_until_result_page_loads(self):
+        """Wait until the result page loads. It is an abstract method because
+        each search engine has a specific element to wait for.
+        """
 
 class GoogleScraper(SearchScraper):
     def __init__(self, **kwargs):
@@ -107,6 +110,12 @@ class GoogleScraper(SearchScraper):
         kwargs['should_encode'] = True
 
         super().__init__(**kwargs)
+
+    def wait_until_input_field_loads(self):
+        self.wait((By.NAME,self.search_input_name))
+            
+    def wait_until_result_page_loads(self):
+        self.wait((By.ID, "resultStats"))
 
 
 class BingScraper(SearchScraper):
@@ -119,6 +128,21 @@ class BingScraper(SearchScraper):
         
         super().__init__(**kwargs)
 
+    def wait_until_input_field_loads(self):
+        """Wait until the an element with name ='q' is visible"""
+
+        try:
+            self.wait((By.NAME,self.search_input_name))
+        except TimeoutException:
+            pass
+           
+    def wait_until_result_page_loads(self):
+        try:
+            # TODO: FIgure out which element to wait fo
+            time.sleep(6)
+        except TimeoutException:
+            pass
+        
 
 class YahooScraper(SearchScraper):
     def __init__(self, **kwargs):
@@ -126,16 +150,30 @@ class YahooScraper(SearchScraper):
         kwargs['page_source_file_name'] = 'test_files/yahoo.html'
         kwargs['search_page_url'] = "https://www.yahoo.com/"
         kwargs['search_input_name'] = "p"
-      #  kwargs['should_encode'] = True
+        kwargs['should_encode'] = True
         
         super().__init__(**kwargs)
 
+    def wait_until_input_field_loads(self):
+        """Wait until an element with name ='p' is visible"""
+        try:
+            self.wait((By.NAME,self.search_input_name))
+        except TimeoutException:
+            pass
+
+    def wait_until_result_page_loads(self):
+        
+        try:
+            # TODO: FIgure out which element to wait for
+            time.sleep(6)
+        except TimeoutException:
+            pass
 
 if __name__ == "__main__":
     search_term = sys.argv[1]
-    yahoo = YahooScraper(search_wait_lower=1, search_wait_upper=2, result_wait_lower=5.5, result_wait_upper=10)
-    bing = BingScraper(search_wait_lower=1, search_wait_upper=2, result_wait_lower=5.5, result_wait_upper=10)
-    google = GoogleScraper(search_wait_lower=1, search_wait_upper=2, result_wait_lower=5.5, result_wait_upper=10)
+    yahoo = YahooScraper()
+    bing = BingScraper()
+    google = GoogleScraper()
     yahoo.search(search_term)
     bing.search(search_term)
     google.search(search_term)
