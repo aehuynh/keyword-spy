@@ -4,6 +4,21 @@ from abc import ABCMeta, abstractmethod
 
 
 class SearchResultParser(metaclass=ABCMeta):
+    """Abstract bases class for search engine parsers. 
+
+    The purpose of the parser classes is to parse the results
+    page HTML. 
+
+    This base class depends on CSS Selectors to parse the HTML pages. Although
+    BeautifulSoup can do much more, parsing by CSS Selectors provides a 
+    more modular approach to web parsing. 
+
+    One problem of using only CSS Selectors is that some pages require 
+    special text manipulation that CSS Selectors cannot accomplish. 
+    The way this class deals with this problem is to grab more data 
+    than necessary when in doubt and then clean the data.
+    """
+
     def __init__(self, search_engine_name, file_name, html=None, soup=None):
         self.search_engine_name = "google"
         # File to get html from
@@ -18,8 +33,8 @@ class SearchResultParser(metaclass=ABCMeta):
         self.soup = soup        
 
     def get_soup(self):
-        """Get the beautiful soup instance of the html. 
-        Creates a new instance from self.html if self.soup does not exist
+        """Get the BeautifulSoup instance of the html. Creates
+        a new instance from self.html if self.soup does not exist
         """
 
         if self.soup is None:
@@ -40,9 +55,10 @@ class SearchResultParser(metaclass=ABCMeta):
                     # Get the "text" variable of the element
                     result = getattr(element[0], "text")
                 elif selectors['target'] is "untag":
-                    # Get all children of element as a single string
+                    # Get everything inside of tag as a string
                     result = remove_outer_tag(element[0])
                 else:
+                    # Get the attribute selects['target'] 
                     result = element[0][selectors['target']]
 
                 results[name] = result
@@ -53,7 +69,10 @@ class SearchResultParser(metaclass=ABCMeta):
         return results
 
     def _parse(self):
-        
+        """Private method that parses html using the search engine
+        specific CSS Selectors.
+        """
+
         soup = self.get_soup()
         selectors = self.css_selectors
         for name, selector in self.css_selectors.items():
@@ -74,6 +93,8 @@ class SearchResultParser(metaclass=ABCMeta):
             setattr(self, name, results)
 
     def parse(self, html=None):
+        """Sets up parsing and calls the private parsing method"""
+
         if html:
             self.html = html
         if self.html is None:
@@ -88,6 +109,8 @@ class SearchResultParser(metaclass=ABCMeta):
         self.html = f.read()
 
 class GoogleParser(SearchResultParser):
+    """Google search result html parser."""
+
     css_selectors = {
         'search_results': {
             'start_tag': 'ol#rso li[class="g"]',
@@ -143,6 +166,8 @@ class GoogleParser(SearchResultParser):
     
 
 class BingParser(SearchResultParser):
+    """Bing search result html parser."""
+
     def __init__(self, **kwargs):
         kwargs['search_engine_name'] = 'bing'
         kwargs['file_name'] = 'test_files/bing.html'
@@ -199,6 +224,8 @@ class BingParser(SearchResultParser):
     }
 
 class YahooParser(SearchResultParser):
+    """Yahoo search result html parser."""
+
     def __init__(self, **kwargs):
         kwargs['search_engine_name'] = 'yahoo'
         kwargs['file_name'] = 'test_files/yahoo.html'
@@ -257,8 +284,12 @@ class YahooParser(SearchResultParser):
 
 # Use this to remove outer tag until I figure out better way to
 def remove_outer_tag(contents):
+    """Returns BeautifulSoup contents with its outer tag removed."""
+
     return ''.join(map(str, contents))
 
+
+# Testing 
 if __name__ == "__main__":
     '''
     google = GoogleParser()
