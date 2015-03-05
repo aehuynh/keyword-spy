@@ -18,9 +18,9 @@ class SearchResultParser(metaclass=ABCMeta):
         self.soup = soup        
 
     def get_soup(self):
-        ''' Get the beautiful soup instance. Creates one from self.html if 
-            self.soup does not exist
-        '''
+        """Get the beautiful soup instance of the html. 
+        Creates a new instance from self.html if self.soup does not exist
+        """
 
         if self.soup is None:
             # Create new Beautiful soup instance out of fed html
@@ -28,9 +28,9 @@ class SearchResultParser(metaclass=ABCMeta):
         return self.soup
 
     def _parse_one(self, soup, css_selectors):
-        ''' Parse one entry using css_selectors to figure out the
-            proper css_selector and variable name
-        '''
+        """Parse one entry using css_selectors to figure out the
+        proper css_selector and variable name
+        """ 
 
         results = {}
         for name, selectors in css_selectors.items():
@@ -47,29 +47,31 @@ class SearchResultParser(metaclass=ABCMeta):
 
                 results[name] = result
         
-        
         if len(results) < 1:
             return None
 
         return results
 
     def _parse(self):
-        rank = 1
+        
         soup = self.get_soup()
         selectors = self.css_selectors
         for name, selector in self.css_selectors.items():
+            rank = 1
             results = []
-            if name is "text_ads":
-                # Navigate to the tag that represents one object
-                for start_tag in soup.select(selector['start_tag']):
-                    result = self._parse_one(start_tag, selector['elements'])
-                    if result is not None:
-                        result['rank'] = rank
-                        rank += 1
+            # Navigate to the tag that represents one object
+            for start_tag in soup.select(selector['start_tag']):
+                
+                result = self._parse_one(start_tag, selector['elements'])
+                if result is not None:
+                    if rank == 1:
+                        print(result)
+                    result['rank'] = rank
+                    rank += 1
 
-                        results.append(result)
+                    results.append(result)
 
-                setattr(self, name, results)
+            setattr(self, name, results)
 
     def parse(self, html=None):
         if html:
@@ -88,21 +90,21 @@ class SearchResultParser(metaclass=ABCMeta):
 class GoogleParser(SearchResultParser):
     css_selectors = {
         'search_results': {
-            'start_tag' : 'li[class="g"]',
+            'start_tag': 'ol#rso li[class="g"]',
             'elements': {
-                'title' : {
+                'title': {
                     'target': 'text',
                     'css_selector': 'div.rc > h3.r > a'
                 },
-                'link' : {
+                'link': {
                     'target': 'href',
                     'css_selector': 'div.rc > h3.r > a'
                 },
-                'visible_url' : {
+                'visible_url': {
                     'target': 'text',
                     'css_selector': 'div.rc > div.s > div > div.f.kv._SWb > cite._Rm'
                 },
-                'creative' : {
+                'creative': {
                     'target': 'text',
                     'css_selector': 'div.rc > div.s > div > span.st'
                 }
@@ -110,21 +112,21 @@ class GoogleParser(SearchResultParser):
 
         },
         'text_ads': {
-            'start_tag' : 'li[class="ads-ad"]',
+            'start_tag': 'li[class="ads-ad"]',
             'elements': {
-                'title' : {
+                'title': {
                     'target': 'text',
                     'css_selector': 'h3 > a:nth-of-type(2)'
                 },
-                'link' : {
+                'link': {
                     'target': 'href',
                     'css_selector': 'h3 > a:nth-of-type(2)'
                 },
-                'visible_url' : {
+                'visible_url': {
                     'target': 'text',
                     'css_selector': 'div.ads-visurl > cite'
                 },
-                'creative' : {
+                'creative': {
                     'target': 'text',
                     'css_selector': 'div.ads-creative'
                 }
@@ -148,26 +150,47 @@ class BingParser(SearchResultParser):
         super().__init__(**kwargs)
 
     css_selectors = {
-        'text_ads': {
-            'start_tag' : "div.sb_add.sb_adTA",
+        'search_results': {
+            'start_tag': 'ol#b_results > li[class="b_algo"]',
             'elements': {
-                'title' : {
+                'title': { 
+                    'target': 'text',
+                    'css_selector': 'h2 > a:nth-of-type(1)' 
+                },
+                'link': {
+                    'target': 'href',
+                    'css_selector': 'h2 > a:nth-of-type(1)' 
+                },
+                'visible_url': {
+                    'target': 'text',
+                    'css_selector': 'div.b_caption > div.b_attribution'
+                },
+                'creative': {
+                    'target': 'text',
+                    'css_selector': 'div.b_caption > p:nth-of-type(1)'
+                }
+            }
+        },
+        'text_ads': {
+            'start_tag': 'div.sb_add.sb_adTA',
+            'elements': {
+                'title': {
                     'target': 'text',
                     'css_selector': 'h2 > a:nth-of-type(1)'
                 },
-                'link' : {
+                'link': {
                     'target': 'href',
                     'css_selector': 'h2 > a:nth-of-type(1)'
                 },
-                'visible_url' : {
+                'visible_url': {
                     'target': 'text',
                     'css_selector': 'div.b_caption > div.b_attribution > cite'
                 },
-                'secondary_text' : {
+                'secondary_text': {
                     'target': 'text',
                     'css_selector': 'div.b_caption > div.b_secondaryText'
                 },
-                'creative' : {
+                'creative': {
                     'target': 'text',
                     'css_selector': 'div.ads-creative'
                 }
@@ -175,14 +198,61 @@ class BingParser(SearchResultParser):
         }
     }
 
-    def parse_shopping_ads(self):
-        pass
+class YahooParser(SearchResultParser):
+    def __init__(self, **kwargs):
+        kwargs['search_engine_name'] = 'yahoo'
+        kwargs['file_name'] = 'test_files/yahoo.html'
 
-    def parse_search_results(self):
-        pass    
+        super().__init__(**kwargs)
 
-    def parse_text_ads(self):
-        pass
+    css_selectors = {
+        'search_results': {
+            'start_tag': 'ol.reg.searchCenterMiddle > li > div.dd.algo',
+            'elements': {
+                'title': { 
+                    'target': 'text',
+                    'css_selector': 'div.compTitle > h3.title > a:nth-of-type(1)' 
+                },
+                'link': {
+                    'target': 'href',
+                    'css_selector': 'div.compTitle > h3.title > a:nth-of-type(1)' 
+                },
+                'visible_url': {
+                    'target': 'text',
+                    'css_selector': 'div.compTitle > div > span'
+                },
+                'creative': {
+                    'target': 'text',
+                    'css_selector': 'div.compText.aAbs > p:nth-of-type(1)'
+                }
+            }
+        },
+        'text_ads': {
+            'start_tag': 'li > div.dd > div[class="layoutMiddle"]',
+            'elements': {
+                'title': {
+                    'target': 'text',
+                    'css_selector': 'div.compTitle > h3.title > a:nth-of-type(1)'
+                },
+                'link': {
+                    'target': 'href',
+                    'css_selector': 'div.compTitle > h3.title > a:nth-of-type(1)'
+                },
+                'visible_url': {
+                    'target': 'text',
+                    'css_selector': 'div.compTitle >  div'
+                },
+                'creative': {
+                    'target': 'text',
+                    'css_selector': 'div.layoutCenter > div.compText > p:nth-of-type(1) > a'
+                }
+            }
+        }
+    }
+
+    # Clean ad out of visible link in the end
+    # Clean the duplicate ads from the bottom
+    # Clean first search result showing in text_ads
 
 
 # Use this to remove outer tag until I figure out better way to
@@ -202,8 +272,8 @@ if __name__ == "__main__":
     bing = BingParser()
     bing.parse()
     
-    for text_ad in bing.text_ads:
-        for key,value in text_ad.items():
+    for fe in bing.search_results:
+        for key,value in fe.items():
             print(str(key) + ": " + str(value))
         print("\n")
     
