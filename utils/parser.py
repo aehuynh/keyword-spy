@@ -34,7 +34,7 @@ class SearchResultParser(metaclass=ABCMeta):
 
     def get_soup(self):
         """Get the BeautifulSoup instance of the html. Creates
-        a new instance from self.html if self.soup does not exist
+        a new instance from self.html if self.soup does not exist.
         """
 
         if self.soup is None:
@@ -42,58 +42,10 @@ class SearchResultParser(metaclass=ABCMeta):
             self.soup = BeautifulSoup(self.html)
         return self.soup
 
-    def _parse_one(self, soup, css_selectors):
-        """Parse one entry using css_selectors to figure out the
-        proper css_selector and variable name
-        """ 
-
-        results = {}
-        for name, selectors in css_selectors.items():
-            element = soup.select(selectors['css_selector'])
-            if element and len(element) == 1:
-                if selectors['target'] is "text":
-                    # Get the "text" variable of the element
-                    result = getattr(element[0], "text")
-                elif selectors['target'] is "untag":
-                    # Get everything inside of tag as a string
-                    result = remove_outer_tag(element[0])
-                else:
-                    # Get the attribute selects['target'] 
-                    result = element[0][selectors['target']]
-
-                results[name] = result
-        
-        if len(results) < 1:
-            return None
-
-        return results
-
-    def _parse(self):
-        """Private method that parses html using the search engine
-        specific CSS Selectors.
-        """
-
-        soup = self.get_soup()
-        selectors = self.css_selectors
-        for name, selector in self.css_selectors.items():
-            rank = 1
-            results = []
-            # Navigate to the tag that represents one object
-            for start_tag in soup.select(selector['start_tag']):
-                
-                result = self._parse_one(start_tag, selector['elements'])
-                if result is not None:
-                    if rank == 1:
-                        print(result)
-                    result['rank'] = rank
-                    rank += 1
-
-                    results.append(result)
-
-            setattr(self, name, results)
-
     def parse(self, html=None):
-        """Sets up parsing and calls the private parsing method"""
+        """Public method to start the html parsing. It initiates the
+        pre-parsing setup. 
+        """
 
         if html:
             self.html = html
@@ -102,11 +54,72 @@ class SearchResultParser(metaclass=ABCMeta):
       
         self._parse()
 
+    def _parse(self):
+        """Private method that parses html using the search engine
+        specific CSS Selectors.
+        """
+
+        soup = self.get_soup()
+        selectors = self.css_selectors
+
+        # Loop through each type of item to parse
+        # ie. text_ads or search_results
+        for item_name, element_selectors in self.css_selectors.items():
+            rank = 1
+            results = []
+            
+            # Navigate to the tag that represents one item
+            for start_tag in soup.select(element_selectors['start_tag']):
+                result = self._find_elements_with_selectors(start_tag, element_selectors['elements'])
+
+                if result is not None:
+                    result['rank'] = rank
+                    rank += 1
+
+                    results.append(result)
+
+            # Set an instance variable representing all the items of the type
+            # item_name 
+            setattr(self, item_name, results)
+
+    def _find_elements_with_selectors(self, soup, css_selectors):
+        """Parse one entry using css_selectors to figure out the
+        proper css_selector and variable name.
+        """ 
+
+        elements = {}
+        for name, selectors in css_selectors.items():
+            result = soup.select(selectors['css_selector'])
+            if result and len(result) == 1:
+                if selectors['target'] is "text":
+                    # Get the "text" variable of the element
+                    element = getattr(result[0], "text")
+                elif selectors['target'] is "untag":
+                    # Get everything inside of tag as a string
+                    element = remove_outer_tag(result[0])
+                else:
+                    # Get the attribute selects['target'] 
+                    element = result[0][selectors['target']]
+
+                elements[name] = element
+        
+        if len(elements) < 1:
+            return None
+
+        return elements
+   
+    # Use this to remove outer tag until I figure out better way to
+    def remove_outer_tag(contents):
+        """Returns BeautifulSoup contents with its outer tag removed."""
+
+        return ''.join(map(str, contents))
 
     # Used for testing
     def get_html_from_file(self):
         f = open(self.file_name, "r")
         self.html = f.read()
+
+
 
 class GoogleParser(SearchResultParser):
     """Google search result html parser."""
@@ -163,16 +176,9 @@ class GoogleParser(SearchResultParser):
 
         super().__init__(**kwargs)
 
-    
 
 class BingParser(SearchResultParser):
     """Bing search result html parser."""
-
-    def __init__(self, **kwargs):
-        kwargs['search_engine_name'] = 'bing'
-        kwargs['file_name'] = 'test_files/bing.html'
-
-        super().__init__(**kwargs)
 
     css_selectors = {
         'search_results': {
@@ -223,14 +229,15 @@ class BingParser(SearchResultParser):
         }
     }
 
-class YahooParser(SearchResultParser):
-    """Yahoo search result html parser."""
-
     def __init__(self, **kwargs):
-        kwargs['search_engine_name'] = 'yahoo'
-        kwargs['file_name'] = 'test_files/yahoo.html'
+        kwargs['search_engine_name'] = 'bing'
+        kwargs['file_name'] = 'test_files/bing.html'
 
         super().__init__(**kwargs)
+    
+
+class YahooParser(SearchResultParser):
+    """Yahoo search result html parser."""
 
     css_selectors = {
         'search_results': {
@@ -277,16 +284,15 @@ class YahooParser(SearchResultParser):
         }
     }
 
-    # Clean ad out of visible link in the end
-    # Clean the duplicate ads from the bottom
-    # Clean first search result showing in text_ads
+    def __init__(self, **kwargs):
+        kwargs['search_engine_name'] = 'yahoo'
+        kwargs['file_name'] = 'test_files/yahoo.html'
 
+        super().__init__(**kwargs)
 
-# Use this to remove outer tag until I figure out better way to
-def remove_outer_tag(contents):
-    """Returns BeautifulSoup contents with its outer tag removed."""
-
-    return ''.join(map(str, contents))
+    # TODO: Clean ad out of visible link in the end
+    # TODO: Clean the duplicate ads from the bottom
+    # TODO: Clean first search result showing in text_ads
 
 
 # Testing 
