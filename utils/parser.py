@@ -1,7 +1,8 @@
 from bs4 import BeautifulSoup
 import re
 from abc import ABCMeta, abstractmethod
-
+from models import dict_to_google_search_result, dict_to_google_search_ad
+import datetime
 
 class SearchResultParser(metaclass=ABCMeta):
     """Abstract bases class for search engine parsers. 
@@ -297,15 +298,18 @@ class YahooParser(SearchResultParser):
 
 # Testing 
 if __name__ == "__main__":
-    '''
+    
     google = GoogleParser()
     google.parse()
     
+    dict_to_google_search_ad("cars", datetime.datetime.now(), google.text_ads)
+    dict_to_google_search_result("cars", datetime.datetime.now(), google.search_results)    
+    '''
     for text_ad in google.text_ads:
         for key,value in text_ad.items():
             print(str(key) + ": " + str(value))
         print("\n")
-'''
+
     bing = BingParser()
     bing.parse()
     
@@ -314,4 +318,4 @@ if __name__ == "__main__":
             print(str(key) + ": " + str(value))
         print("\n")
     
-
+'''
