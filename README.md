@@ -15,7 +15,7 @@ A search engine result and ads scraper
 Keyword Spy is a keyword analytics tool that scrapes search engine results and ads from popular 
 search engine result pages(SERPs) like Google, Yahoo and Bing.
 
-### Scaping Method
+### Scraping Method
 This project uses Selenium to grab the page source of SERPs. The main reason for using Selenium over the basic 
 requests library is because it is able to load Javascript.
 
