@@ -9,6 +9,8 @@ A search engine result and ads scraper
 
 3. [How It Parses HTML](#how-it-parses-html)
 
+4. [Future Features](#future-features)
+
 4. [Scaling Up](#scaling-up)
 
 ###  Description
@@ -33,6 +35,23 @@ with a parsing library.
 I use CSS selectors because it seems like the easiest way to parse content because the CSS path 
 is already laid out nicely when using "Inspect Element". I am not sure about the performance of
 using CSS selectors and will take a look at all the HTML parsing methods when scaling up.
+
+### Future Features
+Here's a list of possible future features:
+
+1. Proxy support
+2. Ability to scrape past first SERP page
+3. SERP error page handling(captcha)
+4. A database and models for scraped results and ads 
+5. A scheduler that manages scraping on multiple VMs
+6. Simple Django website that takes in keywords and shows analysis on the SERP pages scraped
+7. Periodic snapshots of popular search results
+8. Indexing of search results into a cache for quick access
+
+For analysis, I want to take this tool in the NLP direction and provide analysis of ads 
+that will give people who are not the best copywriters ideas on how to write their ad.
+Ideally, the tool would be able to spin the scraped ads to create a new, unique ad out
+of the old ad.
 
 ### Scaling Up
 One of the first problems I will run into is that one IP can only make around one search every 2-4 minutes or
